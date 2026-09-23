@@ -12,7 +12,7 @@ const categories = ["News", "World", "Technology", "Business", "Sports", "Health
 
 export function AppShell({ children, active = "news", category, onCategoryChange, preferences, onTogglePreference, search, onSearchChange, onSearch }: {
   children: React.ReactNode;
-  active?: "news" | "live" | "chat";
+  active?: "news" | "live";
   category?: string;
   onCategoryChange?: (category: string) => void;
   preferences?: string[];
@@ -68,7 +68,6 @@ export function AppShell({ children, active = "news", category, onCategoryChange
         <div className="sidebar-links">
           <Link className={active === "news" ? "active" : ""} href="/" title={t.news}><span>▤</span><b>{t.news}</b></Link>
           <Link className={active === "live" ? "active" : ""} href="/live" title={t.live}><span>◉</span><b>{t.live}<i className="mini-live">LIVE</i></b></Link>
-          <Link className={active === "chat" ? "active" : ""} href="/chat" title={t.chatbot}><span>◌</span><b>{t.chatbot}</b></Link>
           <a href="#preferences" onClick={event => { event.preventDefault(); document.getElementById("preferences")?.scrollIntoView({ behavior: "smooth" }); }} title={t.preferences}><span>☷</span><b>{t.preferences}</b></a>
         </div>
         {sidebarOpen && <><WeatherWidget /><section id="preferences" className="sidebar-preferences"><p>{t.preferences}</p>{categories.slice(2).map(item => <label key={item}><input type="checkbox" checked={preferences?.includes(item) || false} onChange={() => onTogglePreference ? onTogglePreference(item) : chooseCategory(item)} /><span>{item}</span></label>)}</section></>}
