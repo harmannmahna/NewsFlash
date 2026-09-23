@@ -7,16 +7,15 @@ export const mongoClient = new MongoClient(env.mongodbUri);
 export const database = mongoClient.db(env.mongodbDatabase);
 
 async function ensureLocalUser() {
-  if (env.isProduction) return;
-  await database.collection("users").updateOne(
-    { email: env.bootstrapEmail },
-    {
-      $set: { password_hash: await bcrypt.hash(env.bootstrapPassword, 12) },
-      $setOnInsert: { id: crypto.randomUUID(), email: env.bootstrapEmail, created_at: new Date() },
-    },
-    { upsert: true }
-  );
-  console.log(`[auth] local user ready: ${env.bootstrapEmail}`);
+  if (env.isProduction || !env.bootstrapEmail || !env.bootstrapPassword) return;
+  const existing = await database.collection("users").findOne({ email: env.bootstrapEmail });
+  if (existing) return;
+  await database.collection("users").insertOne({
+    id: crypto.randomUUID(),
+    email: env.bootstrapEmail.trim().toLowerCase(),
+    password_hash: await bcrypt.hash(env.bootstrapPassword, 12),
+    created_at: new Date(),
+  });
 }
 
 export async function connectDatabase() {

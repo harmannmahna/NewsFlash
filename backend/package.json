@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {"dev": "node --watch src/server.js", "start": "node src/server.js"},
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
   "dependencies": {
+    "@google/genai": "^2.24.0",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
