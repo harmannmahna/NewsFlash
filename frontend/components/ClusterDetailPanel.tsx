@@ -1,10 +1,11 @@
 "use client";
 
+import { RefObject } from "react";
 import { Cluster } from "../lib/types";
 
-export function ClusterDetailPanel({ cluster, onClose }: { cluster: Cluster | null; onClose: () => void }) {
-  if (!cluster) return <aside className="detail empty-detail"><span className="detail-mark">+</span><p>Select a marker to inspect the articles in that topic cluster.</p></aside>;
-  return <aside className="detail">
+export function ClusterDetailPanel({ cluster, onClose, panelRef }: { cluster: Cluster | null; onClose: () => void; panelRef: RefObject<HTMLElement | null> }) {
+  if (!cluster) return <aside ref={panelRef} className="detail empty-detail"><span className="detail-mark">+</span><p>Select a marker to inspect the articles in that topic cluster.</p></aside>;
+  return <aside ref={panelRef} className="detail">
     <button className="close" onClick={onClose} aria-label="Close details">x</button>
     <p className="eyebrow">Topic cluster</p>
     <h2>{cluster.label}</h2>

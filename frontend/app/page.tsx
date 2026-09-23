@@ -31,6 +31,8 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const clusterPanelRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToCluster = useRef(false);
   const articlesRef = useRef(articles);
   articlesRef.current = articles;
 
@@ -60,6 +62,11 @@ export default function Home() {
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void load(query, true); }, 5 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, [load, query]);
+  useEffect(() => {
+    if (!selectedCluster || !shouldScrollToCluster.current) return;
+    shouldScrollToCluster.current = false;
+    window.requestAnimationFrame(() => clusterPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [selectedCluster]);
 
   const sources = useMemo(() => [...new Set(articles.map(article => article.source))].sort(), [articles]);
   const visibleClusters = useMemo(() => {
@@ -106,9 +113,10 @@ export default function Home() {
   }
 
   async function selectCluster(cluster: TimelineCluster) {
+    shouldScrollToCluster.current = true;
     setSelectedCluster(null);
     try { setSelectedCluster(await getCluster(cluster.id)); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Could not load this topic."); }
+    catch (error) { shouldScrollToCluster.current = false; setNotice(error instanceof Error ? error.message : "Could not load this topic."); }
   }
   function submitSearch(event: FormEvent) { event.preventDefault(); void load(query); }
 
@@ -123,7 +131,7 @@ export default function Home() {
     </div>
     {pendingCount > 0 && <button className="new-articles-toast" onClick={() => { setPendingCount(0); void load(query); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{pendingCount} new {pendingCount === 1 ? "article" : "articles"} available - tap to refresh</button>}
     <div className="timeline-summary"><div><p className="eyebrow">Coverage across time</p><h2>Topics in motion</h2><p>Each marker spans the first and latest article in a cluster. Select one to follow its coverage.</p></div><div className="timeline-count"><strong>{visibleClusters.length}</strong><span>recent topics</span><small>{updatedAt ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</small></div></div>
-    <div className="timeline-layout">{loading ? <div className="feed-state"><span className="loader" />Loading the topic timeline...</div> : visibleClusters.length ? <Timeline clusters={visibleClusters} onSelect={selectCluster} /> : <div className="feed-state"><strong>{notice ? "News timeline unavailable" : "No topics match these filters"}</strong><span>{notice || "Choose another source or date range."}</span></div>}<ClusterDetailPanel cluster={selectedCluster} onClose={() => setSelectedCluster(null)} /></div>
+    <div className="timeline-layout">{loading ? <div className="feed-state"><span className="loader" />Loading the topic timeline...</div> : visibleClusters.length ? <Timeline clusters={visibleClusters} onSelect={selectCluster} /> : <div className="feed-state"><strong>{notice ? "News timeline unavailable" : "No topics match these filters"}</strong><span>{notice || "Choose another source or date range."}</span></div>}<ClusterDetailPanel cluster={selectedCluster} onClose={() => setSelectedCluster(null)} panelRef={clusterPanelRef} /></div>
     <section className="latest-section"><div className="timeline-summary"><div><p className="eyebrow">The latest reporting</p><h2>{t.latest}</h2></div><span>{filtered.length} stories</span></div>{filtered.length ? <div className="news-grid">{filtered.map(article => <NewsCard key={article.id} article={article} onOpen={setSelected} />)}</div> : !loading ? <p className="feed-state">No stories match the selected filters.</p> : null}</section>
     <ArticleDetail article={selected} onClose={() => setSelected(null)} />
   </AppShell></AuthGate>;
