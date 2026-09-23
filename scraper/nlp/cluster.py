@@ -8,16 +8,27 @@ from .preprocess import preprocess
 def cluster_articles(articles: list[dict]) -> list[dict]:
     if not articles:
         return []
-    documents = [preprocess(f"{article['title']} {article.get('summary', '')} {article.get('body', '')}") for article in articles]
+    # Headlines carry the strongest signal. Long article bodies often contain
+    # navigation, unrelated links, and publisher boilerplate that dilute it.
+    documents = [preprocess(f"{article.get('title', '')} {article.get('title', '')} {article.get('summary', '')}") for article in articles]
     vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
     matrix = vectorizer.fit_transform(documents)
     if len(articles) == 1:
         labels = [0]
     else:
         similarities = cosine_similarity(matrix)
-        # 0.35 distance keeps articles together when their cosine similarity is >= 0.65.
+        # RSS summaries are long and source-specific, so require an article
+        # similarity floor plus shared headline terms. A strong overall match
+        # can use one shared headline term; weaker matches need at least two.
+        title_terms = [set(preprocess(article.get("title", "")).split()) for article in articles]
         distances = (1 - similarities).clip(0, 1)
-        labels = DBSCAN(eps=0.35, min_samples=2, metric="precomputed").fit_predict(distances)
+        for left in range(len(articles)):
+            for right in range(left + 1, len(articles)):
+                overlap = len(title_terms[left] & title_terms[right])
+                similarity = similarities[left, right]
+                if not ((similarity >= 0.38 and overlap >= 1) or (similarity >= 0.22 and overlap >= 2)):
+                    distances[left, right] = distances[right, left] = 1.0
+        labels = DBSCAN(eps=0.78, min_samples=2, metric="precomputed").fit_predict(distances)
         labels = [label if label >= 0 else index + max(labels, default=-1) + 1 for index, label in enumerate(labels)]
 
     terms = vectorizer.get_feature_names_out()
