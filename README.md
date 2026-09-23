@@ -55,10 +55,10 @@ Limitation: this is lexical matching, so articles about the same event with very
 
 - Responsive newsroom layout with light/dark mode, English/Hindi/Marathi labels, live clock, and collapsible sidebar.
 - The home page centers the required timeline visualization and cluster detail view. Source and date filters apply to the timeline and latest story grid.
-- Manual refresh starts the Python pipeline, polls its job status, then reloads the timeline. The page also checks for new stories every five minutes.
+- The backend starts the Python pipeline on startup and schedules another run every five minutes while the service is awake. Manual refresh requests an immediate run and polls its job status; the page reloads the timeline when it finishes. Render's free service may sleep when idle, pausing the in-process schedule until the next start.
 - Article details include the source link and browser speech read-aloud.
 - The Live hub includes RSS news, clearly marked demo sports fixtures, and illustrative job-market numbers. Replace mock data with a real source before presenting the figures as live.
-- Optional Gemini chat is grounded in retrieved NewsFlash articles. It stays unavailable until a server-side key is configured.
+- The Gemini chat UI was removed because the provider was unreliable. A legacy backend chat route remains in the API source but is not linked from the frontend.
 - Weather uses Open-Meteo for a user-selected city; no precise location is collected.
 
 ## Assessment delivery
