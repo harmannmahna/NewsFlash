@@ -15,9 +15,10 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 const localFrontendOrigins = new Set(["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"]);
+const deployedFrontendOrigins = new Set(env.frontendOrigin.split(",").map((origin) => origin.trim()).filter(Boolean));
 app.use((request, response, next) => {
   const origin = request.headers.origin;
-  if (origin && (origin === env.frontendOrigin || (!env.isProduction && localFrontendOrigins.has(origin)))) {
+  if (origin && (deployedFrontendOrigins.has(origin) || (!env.isProduction && localFrontendOrigins.has(origin)))) {
     response.header("Access-Control-Allow-Origin", origin);
     response.header("Vary", "Origin");
   }

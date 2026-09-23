@@ -1,27 +1,66 @@
-# News Pulse
+# NewsFlash
 
-News Pulse is a three-part news intelligence app: a Python RSS and NLP ingestion pipeline, an Express/MongoDB API, and a Next.js timeline interface.
+NewsFlash is a topic-clustered news timeline built for the Xponentium India full-stack internship assessment. Python ingests public RSS feeds, extracts article text, groups recent stories, and writes them to MongoDB. An Express API serves the timeline, clusters, and articles. A Next.js interface displays the time-based clusters and lets readers inspect the articles behind each topic.
 
 ```text
-RSS feeds -> normalized articles -> full-text extraction -> TF-IDF + DBSCAN
-                                                        |
-                                     MongoDB <- clusters <- Express API <- Next.js
+BBC News / NPR / The Guardian RSS
+              |
+Python feed parsing, article extraction, and TF-IDF topic grouping
+              |
+MongoDB Atlas or local MongoDB
+              |
+Express REST API with JWT sessions
+              |
+Next.js timeline, cluster explorer, and latest stories
 ```
 
 ## Run locally
 
-1. Install MongoDB locally, or create a MongoDB Atlas deployment and copy its connection string.
-2. Install scraper dependencies: `cd scraper; pip install -r requirements.txt`.
-3. Set `MONGODB_URI` and `MONGODB_DATABASE` in the scraper environment and run `python main.py`.
-4. Install API dependencies: `cd ../backend; npm install`, copy `.env.example` to `.env`, then run `npm run dev`.
-5. Install frontend dependencies: `cd ../frontend; npm install`, copy `.env.local.example` to `.env.local`, then run `npm run dev`.
+Requirements: Python 3.10+, Node.js 20+, and a reachable MongoDB instance.
 
-Open `http://localhost:3000`. Public timeline and cluster reads remain available without auth. Register or sign in to enable the authenticated refresh action. Refresh tokens live in an httpOnly cookie while access tokens stay in memory in the browser.
+1. Copy `scraper/.env.example` to `scraper/.env`. Set `MONGODB_URI` and `MONGO_DB_NAME`.
+2. Copy `backend/.env.example` to `backend/.env`. Set the same MongoDB URI and database name, plus long random `JWT_SECRET` and `JWT_REFRESH_SECRET` values.
+3. Optionally set `GEMINI_API_KEY` in `backend/.env` to enable grounded chat. Keep it private; `.env` is ignored by Git.
+4. In `scraper`, install dependencies with `pip install -r requirements.txt`.
+5. In `backend`, run `npm install` then `npm run dev`.
+6. In `frontend`, run `npm install` then `npm run dev`.
+7. Open the printed frontend URL, create an account at `/register`, then use **Refresh data** to run ingestion.
 
-## Clustering
+The frontend API defaults to `http://localhost:5000`; set `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` if needed. Development CORS allows `localhost` ports 3000 and 3001. In production, set `FRONTEND_ORIGIN` to the exact deployed site origin.
 
-The scraper preprocesses titles, summaries, and extracted bodies, then uses TF-IDF with unigram and bigram features. DBSCAN clusters a precomputed cosine-distance matrix at `eps=0.35`, meaning articles with cosine similarity around 0.65 or higher can join the same topic. The threshold is intentionally conservative; a known limitation is that short or unusually worded coverage can be left as a single-item cluster.
+Use the same database name in the scraper and backend. Both examples use `NEWSFLASH`; if the name is omitted, the code defaults to `newspulse`. Atlas project names are separate from MongoDB database names. The URI can omit a database path when the explicit database name is configured in both services. In your current setup, `MONGO_DB_NAME=NEWSFLASH` in both `.env` files selects the right database already, so adding `/NEWSFLASH` to the URI is not required.
 
-## Deployment
+## Authentication
 
-The frontend can run on Vercel, the API on Render or Railway, and the scraper on GitHub Actions using the included 30-minute workflow. Set `MONGODB_URI`, `MONGODB_DATABASE`, JWT secrets, and the frontend API URL in the target platform. MongoDB Atlas is recommended for a hosted database; no Docker or local database container is required.
+`/register` and `/login` create or verify accounts. Passwords are hashed with bcrypt. The API issues a short-lived access JWT and stores a seven-day refresh JWT in an httpOnly cookie. The browser restores sessions from that cookie and redirects protected pages to `/login` when no valid session exists. Local bootstrap users are optional, created only when both bootstrap environment variables are explicitly set, and are never reset on restart. Production requires both JWT secrets.
+
+## News ingestion and grouping
+
+The scraper reads BBC News, NPR, and The Guardian public RSS feeds. It normalizes feed source names and dates, fetches article pages where possible, reads image metadata from RSS, and skips duplicate URLs. Failed article extraction falls back to the RSS title and summary so one malformed page does not stop the run.
+
+Grouping uses TF-IDF word and two-word phrase vectors over a weighted headline plus summary. A pair can join a cluster when its cosine similarity is at least 0.38 with one meaningful shared headline word, or at least 0.22 with two shared headline words; DBSCAN uses `eps=0.78` and `min_samples=2`. Each refresh regroups up to 600 articles from the latest 30 days so that new items can join stories stored by earlier runs. Cluster labels use the highest-scoring terms. Articles not similar enough to another headline remain single-story topics.
+
+Limitation: this is lexical matching, so articles about the same event with very different wording can stay in separate clusters. Shared headline words can also occasionally connect stories that are related by a person or place but describe different events. The method favors avoiding broad, misleading clusters.
+
+## API
+
+- `GET /health`
+- `GET /articles?q=optional-search` - up to 120 stories from the latest 30 days, newest first
+- `GET /clusters`, `GET /clusters/:id`, `GET /timeline`
+- `POST /ingest/trigger`, `GET /ingest/status/:jobId` - require a bearer access token
+- `POST /chat` - requires a bearer token and `GEMINI_API_KEY`; retrieves recent matching stories and returns source links
+- `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`
+
+## Interface features
+
+- Responsive newsroom layout with light/dark mode, English/Hindi/Marathi labels, live clock, and collapsible sidebar.
+- The home page centers the required timeline visualization and cluster detail view. Source and date filters apply to the timeline and latest story grid.
+- Manual refresh starts the Python pipeline, polls its job status, then reloads the timeline. The page also checks for new stories every five minutes.
+- Article details include the source link and browser speech read-aloud.
+- The Live hub includes RSS news, clearly marked demo sports fixtures, and illustrative job-market numbers. Replace mock data with a real source before presenting the figures as live.
+- Optional Gemini chat is grounded in retrieved NewsFlash articles. It stays unavailable until a server-side key is configured.
+- Weather uses Open-Meteo for a user-selected city; no precise location is collected.
+
+## Assessment delivery
+
+The assessment also requires a deployed frontend URL, backend URL, and a 2-3 minute walkthrough video. Those need hosting accounts and a video link; configure environment secrets on the hosting platforms rather than committing them to this repository.
