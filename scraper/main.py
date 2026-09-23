@@ -1,4 +1,5 @@
 import logging
+from uuid import uuid4
 
 from config import FEED_URLS
 from db.writer import get_latest_published_at, save_article, save_cluster, update_article_cluster
@@ -35,7 +36,9 @@ def run() -> tuple[int, int]:
     formed = 0
     for cluster_data in cluster_articles(new_articles):
         article_ids = [article["_id"] for article in cluster_data["articles"]]
-        cluster_id = save_cluster({
+        cluster_id = str(uuid4())
+        save_cluster({
+            "cluster_id": cluster_id,
             "label": cluster_data["label"],
             "article_ids": article_ids,
             "earliest_published_at": cluster_data["earliest_published_at"],

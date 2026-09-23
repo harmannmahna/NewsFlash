@@ -12,4 +12,5 @@ export const getTimeline = () => request<TimelineCluster[]>("/timeline");
 export const getCluster = (id: string) => request<Cluster>(`/clusters/${id}`);
 export const triggerIngest = (token: string) => request<{ jobId: string }>("/ingest/trigger", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
 export const getJobStatus = (id: string, token: string) => request<{ status: string }>(`/ingest/status/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+export const refreshAccessToken = () => request<{ accessToken: string }>("/auth/refresh", { method: "POST" });
 export const authenticate = (path: string, email: string, password: string) => request<{ accessToken: string }>(path, { method: "POST", body: JSON.stringify({ email, password }) });

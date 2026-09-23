@@ -17,6 +17,7 @@ clusters_col = db["clusters"]
 
 try:
     articles_col.create_index("content_hash", unique=True)
+    clusters_col.create_index("cluster_id", unique=True)
 except Exception:
     logger.exception("Unable to create the unique article content hash index")
 
@@ -33,7 +34,7 @@ def save_cluster(cluster: dict) -> ObjectId:
     return clusters_col.insert_one(cluster).inserted_id
 
 
-def update_article_cluster(article_id: ObjectId, cluster_id: ObjectId) -> None:
+def update_article_cluster(article_id: ObjectId, cluster_id: str) -> None:
     articles_col.update_one({"_id": article_id}, {"$set": {"cluster_id": cluster_id}})
 
 

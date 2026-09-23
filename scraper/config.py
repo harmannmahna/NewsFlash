@@ -3,8 +3,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "newspulse")
+MONGO_URI = os.getenv("MONGODB_URI", os.getenv("MONGO_URI", "mongodb://localhost:27017"))
+MONGO_DB_NAME = os.getenv("MONGODB_DATABASE", os.getenv("MONGO_DB_NAME", "newspulse"))
 FEED_URLS = [
     value.strip()
     for value in os.getenv(
