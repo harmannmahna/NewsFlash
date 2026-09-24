@@ -47,3 +47,6 @@ def cluster_articles(articles: list[dict]) -> list[dict]:
             "size": len(members),
         })
     return clusters
+# RSS summaries are long and source-specific, so require an article
+# similarity floor plus shared headline terms. A strong overall match
+# can use one shared headline term; weaker matches need at least two.
