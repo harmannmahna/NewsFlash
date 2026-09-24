@@ -160,6 +160,6 @@ scraper/tests/     Scraper/NLP tests
 
 - [x] Source code for the frontend, API, and scraper
 - [x] Deployed frontend and backend links above
-- [ ] Add the 2–3 minute video walkthrough link
+- [x] Add the 2–3 minute video walkthrough link
 - [x] Project setup, architecture, data sources, grouping method, and limitations documented
 
