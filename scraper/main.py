@@ -1,5 +1,4 @@
 import logging
-from uuid import uuid4
 
 from config import FEED_URLS
 from db.writer import article_exists, load_articles_for_clustering, normalize_article_sources, replace_clusters, save_article, update_article_image, update_article_source
@@ -44,7 +43,10 @@ def run() -> tuple[int, int]:
     cluster_documents = []
     for cluster_data in cluster_articles(grouped_articles):
         article_ids = [article["_id"] for article in cluster_data["articles"]]
-        cluster_id = str(uuid4())
+        # Anchor the topic ID to its earliest persisted article. Re-running
+        # clustering then keeps the same ID while coverage grows, so a page
+        # with a slightly stale timeline can still open the topic.
+        cluster_id = f"topic-{min(str(article_id) for article_id in article_ids)}"
         cluster_documents.append({
             "cluster_id": cluster_id,
             "label": cluster_data["label"],

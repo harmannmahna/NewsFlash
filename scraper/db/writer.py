@@ -76,16 +76,42 @@ def load_articles_for_clustering(days: int = 30, limit: int = 600) -> list[dict]
 
 
 def replace_clusters(clusters: list[dict]) -> None:
-    """Replace derived cluster records and assignments for the current news window."""
-    articles_col.update_many({}, {"$unset": {"cluster_id": ""}})
-    clusters_col.delete_many({})
-    if clusters:
-        clusters_col.insert_many(clusters)
-        for cluster in clusters:
-            articles_col.update_many(
-                {"_id": {"$in": cluster["article_ids"]}},
-                {"$set": {"cluster_id": cluster["cluster_id"]}},
-            )
+    """Refresh cluster records without exposing an empty/stale-ID window."""
+    active_ids = [cluster["cluster_id"] for cluster in clusters]
+    obsolete_ids = clusters_col.distinct(
+        "cluster_id",
+        {"cluster_id": {"$nin": active_ids}},
+    )
+
+    # Move article membership while the previous cluster documents still
+    # exist. This avoids deleting IDs that an already-open timeline can use.
+    for cluster in clusters:
+        articles_col.update_many(
+            {"_id": {"$in": cluster["article_ids"]}},
+            {"$set": {"cluster_id": cluster["cluster_id"]}},
+        )
+
+    # Publish the refreshed set after its article assignments are ready.
+    for cluster in clusters:
+        clusters_col.replace_one(
+            {"cluster_id": cluster["cluster_id"]},
+            cluster,
+            upsert=True,
+        )
+
+    # Remove topics that no longer exist only after the new set is ready.
+    if active_ids:
+        clusters_col.delete_many({"cluster_id": {"$nin": active_ids}})
+    else:
+        clusters_col.delete_many({})
+
+    # Clear references to removed topics from stories outside the rebuilt
+    # window, without scanning every article against a large ID exclusion list.
+    if obsolete_ids:
+        articles_col.update_many(
+            {"cluster_id": {"$in": obsolete_ids}},
+            {"$unset": {"cluster_id": ""}},
+        )
 
 
 def get_latest_published_at(source: str) -> Optional[datetime]:

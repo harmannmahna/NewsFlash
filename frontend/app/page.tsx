@@ -115,8 +115,55 @@ export default function Home() {
   async function selectCluster(cluster: TimelineCluster) {
     shouldScrollToCluster.current = true;
     setSelectedCluster(null);
-    try { setSelectedCluster(await getCluster(cluster.id)); }
-    catch (error) { shouldScrollToCluster.current = false; setNotice(error instanceof Error ? error.message : "Could not load this topic."); }
+    setNotice("");
+    try {
+      setSelectedCluster(await getCluster(cluster.id));
+      return;
+    } catch (error) {
+      const missingCluster = error instanceof Error && /cluster not found/i.test(error.message);
+      if (!missingCluster) {
+        shouldScrollToCluster.current = false;
+        setNotice(error instanceof Error ? error.message : "Could not load this topic.");
+        return;
+      }
+    }
+
+    // A scheduled scraper run can replace topic IDs while this tab still has
+    // an older timeline. Refresh it and transparently retry the matching row.
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 250));
+        const latest = await getTimeline();
+        setClusters(latest);
+        const sameLabel = latest.find(item => item.label === cluster.label);
+        const selectedStart = new Date(cluster.start).getTime();
+        const selectedEnd = new Date(cluster.end).getTime();
+        const closestRelated = latest
+          .filter(item => {
+            const terms = new Set(cluster.label.toLowerCase().split(/\W+/).filter(Boolean));
+            const sharedTerms = item.label.toLowerCase().split(/\W+/).filter(term => terms.has(term));
+            const starts = new Date(item.start).getTime();
+            const ends = new Date(item.end).getTime();
+            const overlaps = Math.max(0, Math.min(selectedEnd, ends) - Math.max(selectedStart, starts));
+            const windowDistance = Math.max(0, Math.max(selectedStart - ends, starts - selectedEnd));
+            return sharedTerms.length > 0 && (overlaps > 0 || windowDistance <= 30 * 60 * 1000);
+          })
+          .sort((left, right) => Math.abs(new Date(left.end).getTime() - selectedEnd) - Math.abs(new Date(right.end).getTime() - selectedEnd))[0];
+        const replacement = sameLabel || closestRelated;
+        if (!replacement) continue;
+        try {
+          setSelectedCluster(await getCluster(replacement.id));
+          return;
+        } catch (retryError) {
+          if (!(retryError instanceof Error) || !/cluster not found/i.test(retryError.message)) throw retryError;
+        }
+      }
+      shouldScrollToCluster.current = false;
+      setNotice("The topic list changed during an update. It has been refreshed; please select the topic again.");
+    } catch (retryError) {
+      shouldScrollToCluster.current = false;
+      setNotice(retryError instanceof Error ? retryError.message : "Could not reload the updated topics.");
+    }
   }
   function submitSearch(event: FormEvent) { event.preventDefault(); void load(query); }
 
