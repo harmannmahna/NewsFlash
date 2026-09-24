@@ -7,7 +7,7 @@
 - **Frontend:** [newsflash-1-nssj.onrender.com](https://newsflash-1-nssj.onrender.com)
 - **Backend API:** [newsflash-orxd.onrender.com](https://newsflash-orxd.onrender.com)
 - **Health check:** [API health](https://newsflash-orxd.onrender.com/health)
-- **Video walkthrough:** Add the required 2–3 minute recording link here before submission.
+- **Video walkthrough:** [Link](https://youtu.be/ACS6-8OKRSw)
 
 The first request can take longer if the Render service has been idle and needs to wake up.
 
