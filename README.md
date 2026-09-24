@@ -1,66 +1,165 @@
 # NewsFlash
 
-NewsFlash is a topic-clustered news timeline built for the Xponentium India full-stack internship assessment. Python ingests public RSS feeds, extracts article text, groups recent stories, and writes them to MongoDB. An Express API serves the timeline, clusters, and articles. A Next.js interface displays the time-based clusters and lets readers inspect the articles behind each topic.
+**A live news coverage explorer that groups related reporting into topic clusters.** NewsFlash collects recent stories from BBC News, NPR, and The Guardian, groups textually related coverage, and presents it as a timeline and a live-news feed.
+
+## Live project
+
+- **Frontend:** [newsflash-1-nssj.onrender.com](https://newsflash-1-nssj.onrender.com)
+- **Backend API:** [newsflash-orxd.onrender.com](https://newsflash-orxd.onrender.com)
+- **Health check:** [API health](https://newsflash-orxd.onrender.com/health)
+- **Video walkthrough:** Add the required 2–3 minute recording link here before submission.
+
+The first request can take longer if the Render service has been idle and needs to wake up.
+
+## Screenshots
+
+### News timeline and topic coverage
+
+![NewsFlash timeline with topic filters and story coverage](docs/screenshots/newsflash-timeline.png)
+
+### Articles in a selected topic cluster
+
+![NewsFlash cluster detail panel with related articles and source links](docs/screenshots/newsflash-cluster-details.png)
+
+### Live news hub
+
+![NewsFlash Live hub with recent news cards](docs/screenshots/newsflash-live-hub.png)
+
+## What it does
+
+- Fetches recent RSS items from **BBC News, NPR, and The Guardian**.
+- Attempts to extract article-page text and images; if extraction fails, it retains the RSS title and summary so an individual publisher page does not stop ingestion.
+- Avoids inserting the same story URL more than once.
+- Uses TF-IDF and cosine similarity to group stories with overlapping headline terms.
+- Displays topic clusters on a timeline, with source and date filters and a panel for reading the articles in a selected cluster.
+- Supports account registration and sign-in. Passwords are hashed with bcrypt; access and refresh tokens are used for sessions.
+- Includes a responsive interface, light/dark theme, English/Hindi/Marathi interface labels, a live clock, and weather by selected city.
+- Includes a Live hub. Its news tab uses collected news; sports fixtures and job-market figures are demo/mock data and should not be presented as verified live statistics.
+
+## Architecture and data flow
 
 ```text
-BBC News / NPR / The Guardian RSS
-              |
-Python feed parsing, article extraction, and TF-IDF topic grouping
-              |
-MongoDB Atlas or local MongoDB
-              |
-Express REST API with JWT sessions
-              |
-Next.js timeline, cluster explorer, and latest stories
+BBC / NPR / The Guardian RSS feeds
+                 |
+                 v
+Python scraper: fetch -> normalize -> extract -> deduplicate -> group
+                 |
+                 v
+MongoDB Atlas (articles and topic clusters)
+                 |
+                 v
+Express REST API (authentication, timeline, articles, ingestion)
+                 |
+                 v
+Next.js / React frontend
 ```
+
+The **Refresh data** action calls the protected ingestion endpoint. The Express backend launches the Python scraper, which stores refreshed articles and clusters in MongoDB. The frontend polls the job status and reloads the timeline when ingestion finishes. The backend also starts an ingestion and schedules another every five minutes while the process is awake. On Render's free web service, sleeping pauses this in-process schedule; it is not a 24/7 background worker.
+
+## Topic grouping
+
+The grouping implementation is in [`scraper/nlp/cluster.py`](scraper/nlp/cluster.py). It builds TF-IDF vectors from each article's headline (weighted by repeating it) and RSS summary. `TfidfVectorizer` considers single words and two-word phrases, with up to 5,000 features. It then computes cosine similarities and uses DBSCAN with a precomputed distance matrix.
+
+To avoid joining stories on vague summary overlap alone, a pair is considered close when either:
+
+- similarity is at least `0.38` and the headlines share at least one processed term; or
+- similarity is at least `0.22` and the headlines share at least two processed terms.
+
+DBSCAN uses `eps=0.78` and `min_samples=2`. Articles that do not match another story remain as single-story topics. The pipeline regroups up to 600 recent articles from the latest 30 days, so new stories can join coverage already collected on an earlier run.
+
+**Known limitation:** this is text matching, not event understanding. Coverage of the same event can split when outlets use different wording, while stories sharing people or places can occasionally be grouped. The approach favors tighter groups over broad clusters.
+
+## Technology
+
+| Area | Technology | Role |
+| --- | --- | --- |
+| Frontend | Next.js 15, React 19, TypeScript | Pages, components, forms, timeline, and API requests |
+| Backend | Node.js, Express | REST endpoints, authentication, and starting scraper jobs |
+| Scraper and grouping | Python, feedparser, Trafilatura, BeautifulSoup, scikit-learn | RSS collection, article extraction, text preparation, deduplication, and TF-IDF/DBSCAN grouping |
+| Database | MongoDB / MongoDB Atlas | Stores user accounts, articles, and clusters |
+| Authentication | bcrypt, JWT, httpOnly refresh cookie | Password hashing and user sessions |
+| Weather | Open-Meteo | Weather for the selected city |
+| Hosting | Render | Hosts the frontend and backend services |
+
+## API overview
+
+The backend base URL is `https://newsflash-orxd.onrender.com`.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Confirms that the API process responds. |
+| `GET /articles?q=term` | Lists recent articles, optionally searched by text. |
+| `GET /clusters` | Lists topic clusters. |
+| `GET /clusters/:id` | Returns one cluster and its articles. |
+| `GET /timeline` | Returns timeline cluster data. |
+| `POST /ingest/trigger` | Starts a scraper run; requires a bearer access token. |
+| `GET /ingest/status/:jobId` | Checks ingestion progress; requires a bearer access token. |
+| `POST /auth/register` | Creates an account. |
+| `POST /auth/login` | Signs in. |
+| `POST /auth/refresh` | Refreshes a session using the httpOnly cookie. |
+| `POST /auth/logout` | Ends the session. |
 
 ## Run locally
 
-Requirements: Python 3.10+, Node.js 20+, and a reachable MongoDB instance.
+Prerequisites: Node.js 20+, Python 3.10+, and access to MongoDB (local or Atlas).
 
-1. Copy `scraper/.env.example` to `scraper/.env`. Set `MONGODB_URI` and `MONGO_DB_NAME`.
-2. Copy `backend/.env.example` to `backend/.env`. Set the same MongoDB URI and database name, plus long random `JWT_SECRET` and `JWT_REFRESH_SECRET` values.
-3. Optionally set `GEMINI_API_KEY` in `backend/.env` to enable grounded chat. Keep it private; `.env` is ignored by Git.
-4. In `scraper`, install dependencies with `pip install -r requirements.txt`.
-5. In `backend`, run `npm install` then `npm run dev`.
-6. In `frontend`, run `npm install` then `npm run dev`.
-7. Open the printed frontend URL, create an account at `/register`, then use **Refresh data** to run ingestion.
+1. Create `scraper/.env` from `scraper/.env.example`. Set `MONGO_URI` and `MONGO_DB_NAME`.
+2. Create `backend/.env` from `backend/.env.example`. Set `MONGODB_URI`, `MONGODB_DATABASE`, `JWT_SECRET`, and `JWT_REFRESH_SECRET`.
+3. Create `frontend/.env.local` from `frontend/.env.local.example`. For local development, use `NEXT_PUBLIC_API_BASE_URL=http://localhost:5000`.
+4. Install scraper dependencies from the `scraper` directory:
 
-The frontend API defaults to `http://localhost:5000`; set `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` if needed. Development CORS allows `localhost` ports 3000 and 3001. In production, set `FRONTEND_ORIGIN` to the exact deployed site origin.
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
 
-Use the same database name in the scraper and backend. Both examples use `NEWSFLASH`; if the name is omitted, the code defaults to `newspulse`. Atlas project names are separate from MongoDB database names. The URI can omit a database path when the explicit database name is configured in both services. In your current setup, `MONGO_DB_NAME=NEWSFLASH` in both `.env` files selects the right database already, so adding `/NEWSFLASH` to the URI is not required.
+5. In a terminal, install and start the backend:
 
-## Authentication
+   ```powershell
+   cd backend
+   npm install
+   npm run dev
+   ```
 
-`/register` and `/login` create or verify accounts. Passwords are hashed with bcrypt. The API issues a short-lived access JWT and stores a seven-day refresh JWT in an httpOnly cookie. The browser restores sessions from that cookie and redirects protected pages to `/login` when no valid session exists. Local bootstrap users are optional, created only when both bootstrap environment variables are explicitly set, and are never reset on restart. Production requires both JWT secrets.
+6. In another terminal, install and start the frontend:
 
-## News ingestion and grouping
+   ```powershell
+   cd frontend
+   npm install
+   npm run dev
+   ```
 
-The scraper reads BBC News, NPR, and The Guardian public RSS feeds. It normalizes feed source names and dates, fetches article pages where possible, reads image metadata from RSS, and skips duplicate URLs. Failed article extraction falls back to the RSS title and summary so one malformed page does not stop the run.
+7. Open the local URL printed by Next.js, create an account at `/register`, and choose **Refresh data** to start collection.
 
-Grouping uses TF-IDF word and two-word phrase vectors over a weighted headline plus summary. A pair can join a cluster when its cosine similarity is at least 0.38 with one meaningful shared headline word, or at least 0.22 with two shared headline words; DBSCAN uses `eps=0.78` and `min_samples=2`. Each refresh regroups up to 600 articles from the latest 30 days so that new items can join stories stored by earlier runs. Cluster labels use the highest-scoring terms. Articles not similar enough to another headline remain single-story topics.
+Use the **same MongoDB cluster and database name** in the backend and scraper environment. Never commit `.env` files, database credentials, JWT secrets, or API keys. Gemini is not required for the current visible UI.
 
-Limitation: this is lexical matching, so articles about the same event with very different wording can stay in separate clusters. Shared headline words can also occasionally connect stories that are related by a person or place but describe different events. The method favors avoiding broad, misleading clusters.
+## Render configuration
 
-## API
+The deployed frontend must call the deployed backend, not `localhost`:
 
-- `GET /health`
-- `GET /articles?q=optional-search` - up to 120 stories from the latest 30 days, newest first
-- `GET /clusters`, `GET /clusters/:id`, `GET /timeline`
-- `POST /ingest/trigger`, `GET /ingest/status/:jobId` - require a bearer access token
-- `POST /chat` - requires a bearer token and `GEMINI_API_KEY`; retrieves recent matching stories and returns source links
-- `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`
+- Frontend environment variable: `NEXT_PUBLIC_API_BASE_URL=https://newsflash-orxd.onrender.com`
+- Backend environment variable: `FRONTEND_ORIGIN=https://newsflash-1-nssj.onrender.com`
+- Set the MongoDB URI/database and both JWT secrets in the backend service's environment.
+- Set the scraper's MongoDB URI/database in the environment used by the scraper process.
+- Ensure the backend build installs both Node and Python dependencies, and that its start command launches `backend/src/server.js` from the repository layout.
 
-## Interface features
+After changing Render environment variables, redeploy the affected service. For Next.js, `NEXT_PUBLIC_*` values are baked in during the frontend build, so changing that value requires a new frontend build/deploy.
 
-- Responsive newsroom layout with light/dark mode, English/Hindi/Marathi labels, live clock, and collapsible sidebar.
-- The home page centers the required timeline visualization and cluster detail view. Source and date filters apply to the timeline and latest story grid.
-- The backend starts the Python pipeline on startup and schedules another run every five minutes while the service is awake. Manual refresh requests an immediate run and polls its job status; the page reloads the timeline when it finishes. Render's free service may sleep when idle, pausing the in-process schedule until the next start.
-- Article details include the source link and browser speech read-aloud.
-- The Live hub includes RSS news, clearly marked demo sports fixtures, and illustrative job-market numbers. Replace mock data with a real source before presenting the figures as live.
-- The Gemini chat UI was removed because the provider was unreliable. A legacy backend chat route remains in the API source but is not linked from the frontend.
-- Weather uses Open-Meteo for a user-selected city; no precise location is collected.
+## Project map
 
-## Assessment delivery
+```text
+backend/src/       Express app, routes, auth, database, and ingestion job
+frontend/app/      Next.js routes and pages
+frontend/components/ Shared interface components
+frontend/lib/      API client and frontend types
+scraper/main.py    RSS collection and scraper entry point
+scraper/nlp/       Text cleanup and article clustering
+scraper/tests/     Scraper/NLP tests
+```
 
-The assessment also requires a deployed frontend URL, backend URL, and a 2-3 minute walkthrough video. Those need hosting accounts and a video link; configure environment secrets on the hosting platforms rather than committing them to this repository.
+## Assessment delivery checklist
+
+- [x] Source code for the frontend, API, and scraper
+- [x] Deployed frontend and backend links above
+- [ ] Add the 2–3 minute video walkthrough link
+- [x] Project setup, architecture, data sources, grouping method, and limitations documented
+
